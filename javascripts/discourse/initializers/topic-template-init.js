@@ -1,10 +1,11 @@
 import { apiInitializer } from "discourse/lib/api";
 import { i18n } from "discourse-i18n";
+import Composer from "discourse/models/composer"; // Import direct du modèle
 
 export default apiInitializer("1.14.0", (api) => {
   const site = api.container.lookup("service:site");
 
-  // Extend D-Editor component to handle topic template placeholders
+  // 1. Extend D-Editor component (Les composants supportent toujours modifyClass)
   api.modifyClass(
     "component:d-editor",
     (Superclass) =>
@@ -23,7 +24,7 @@ export default apiInitializer("1.14.0", (api) => {
       }
   );
 
-  // Extend composer-editor to apply topic template placeholders per category
+  // 2. Extend composer-editor component
   api.modifyClass(
     "component:composer-editor",
     (Superclass) =>
@@ -31,7 +32,6 @@ export default apiInitializer("1.14.0", (api) => {
         get replyPlaceholder() {
           const categoryId = this.composer?.model?.categoryId;
 
-          // If topic exists and we only apply templates on first post, use default behavior
           if (this.topic && settings.only_apply_on_first_post) {
             return super.replyPlaceholder;
           }
@@ -56,27 +56,30 @@ export default apiInitializer("1.14.0", (api) => {
       }
   );
 
-  // Extend composer model to handle topic template application logic
-  api.modifyClass(
-    "model:composer",
-    (Superclass) =>
-      class extends Superclass {
-        applyTopicTemplate(oldCategoryId, categoryId) {
-          super.applyTopicTemplate?.(oldCategoryId, categoryId);
+  // 3. NOUVELLE APPROCHE POUR LE MODÈLE (Correction de la dépréciation)
+  // On capture la fonction d'origine pour remplacer l'appel à `super()`
+  const originalApplyTopicTemplate = Composer.prototype.applyTopicTemplate;
 
-          const category = site.categories.find((cat) => cat.id === categoryId);
-          const indicator =
-            settings.topic_template_placeholder_indicator || "[placeholder]";
+  // Utilisation de la nouvelle API addModelMethod recommandée par Discourse
+  api.addModelMethod(
+    "composer",
+    "applyTopicTemplate",
+    function (oldCategoryId, categoryId) {
+      // Équivalent de super.applyTopicTemplate?.(oldCategoryId, categoryId);
+      originalApplyTopicTemplate?.call(this, oldCategoryId, categoryId);
 
-          if (
-            category?.topic_template &&
-            (settings.display_all_topic_templates_as_placeholders ||
-              this.reply?.startsWith(indicator)) &&
-            category.topic_template === this.reply
-          ) {
-            this.reply = "";
-          }
-        }
+      const category = site.categories.find((cat) => cat.id === categoryId);
+      const indicator =
+        settings.topic_template_placeholder_indicator || "[placeholder]";
+
+      if (
+        category?.topic_template &&
+        (settings.display_all_topic_templates_as_placeholders ||
+          this.reply?.startsWith(indicator)) &&
+        category.topic_template === this.reply
+      ) {
+        this.reply = ""; // Syntaxe native (remplace this.set)
       }
+    }
   );
 });
