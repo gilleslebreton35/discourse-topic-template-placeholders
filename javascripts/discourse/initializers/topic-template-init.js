@@ -1,8 +1,7 @@
 import { apiInitializer } from "discourse/lib/api";
-import discourseComputed from "discourse/lib/decorators";
 import { i18n } from "discourse-i18n";
 
-export default apiInitializer("1.8.0", (api) => {
+export default apiInitializer("1.14.0", (api) => {
   const site = api.container.lookup("service:site");
 
   // Extend D-Editor component to handle topic template placeholders
@@ -10,15 +9,15 @@ export default apiInitializer("1.8.0", (api) => {
     "component:d-editor",
     (Superclass) =>
       class extends Superclass {
-        @discourseComputed("placeholder")
-        placeholderTranslated(placeholder) {
+        get placeholderTranslated() {
+          const placeholder = this.placeholder;
           const indicator =
             settings.topic_template_placeholder_indicator || "[placeholder]";
-          
+
           if (placeholder?.startsWith(indicator)) {
             return placeholder.replace(indicator, "");
           }
-          
+
           return placeholder ? i18n(placeholder) : null;
         }
       }
@@ -29,17 +28,18 @@ export default apiInitializer("1.8.0", (api) => {
     "component:composer-editor",
     (Superclass) =>
       class extends Superclass {
-        @discourseComputed("composer.model.categoryId")
-        replyPlaceholder(categoryId) {
+        get replyPlaceholder() {
+          const categoryId = this.composer?.model?.categoryId;
+
           // If topic exists and we only apply templates on first post, use default behavior
           if (this.topic && settings.only_apply_on_first_post) {
             return super.replyPlaceholder;
           }
-  
+
           const category = site.categories.find((cat) => cat.id === categoryId);
           const indicator =
             settings.topic_template_placeholder_indicator || "[placeholder]";
-  
+
           if (category?.topic_template) {
             if (
               settings.display_all_topic_templates_as_placeholders ||
@@ -50,7 +50,7 @@ export default apiInitializer("1.8.0", (api) => {
                 : `${indicator}${category.topic_template}`;
             }
           }
-  
+
           return super.replyPlaceholder;
         }
       }
@@ -63,18 +63,18 @@ export default apiInitializer("1.8.0", (api) => {
       class extends Superclass {
         applyTopicTemplate(oldCategoryId, categoryId) {
           super.applyTopicTemplate?.(oldCategoryId, categoryId);
-  
+
           const category = site.categories.find((cat) => cat.id === categoryId);
           const indicator =
             settings.topic_template_placeholder_indicator || "[placeholder]";
-  
+
           if (
             category?.topic_template &&
             (settings.display_all_topic_templates_as_placeholders ||
               this.reply?.startsWith(indicator)) &&
             category.topic_template === this.reply
           ) {
-            this.set("reply", "");
+            this.reply = "";
           }
         }
       }
